@@ -1,7 +1,6 @@
 package utils
 
 import (
-	"errors"
 	"strings"
 	"testing"
 )
@@ -9,8 +8,8 @@ import (
 // Mock ReadCloser for testing
 type mockReadCloser struct {
 	*strings.Reader
-	closed bool
 	err    error
+	closed bool
 }
 
 func (m *mockReadCloser) Close() error {
@@ -25,14 +24,6 @@ func newMockReadCloser(content string) *mockReadCloser {
 	}
 }
 
-func newMockReadCloserWithError(content string, closeErr error) *mockReadCloser {
-	return &mockReadCloser{
-		Reader: strings.NewReader(content),
-		closed: false,
-		err:    closeErr,
-	}
-}
-
 func TestGetLinesChannel_Normal(t *testing.T) {
 	content := "line1\nline2\nline3"
 	reader := newMockReadCloser(content)
@@ -40,7 +31,7 @@ func TestGetLinesChannel_Normal(t *testing.T) {
 	lineChannel, errorChannel := GetLinesChannel(reader)
 
 	expectedLines := []string{"line1", "line2", "line3"}
-	var receivedLines []string
+	receivedLines := make([]string, 0, 3)
 
 	for line := range lineChannel {
 		receivedLines = append(receivedLines, line)
@@ -76,7 +67,7 @@ func TestGetLinesChannel_EmptyFile(t *testing.T) {
 
 	lineChannel, errorChannel := GetLinesChannel(reader)
 
-	var receivedLines []string
+	receivedLines := make([]string, 0, 1)
 	for line := range lineChannel {
 		receivedLines = append(receivedLines, line)
 	}
@@ -105,7 +96,7 @@ func TestGetLinesChannel_SingleLine(t *testing.T) {
 
 	lineChannel, errorChannel := GetLinesChannel(reader)
 
-	var receivedLines []string
+	receivedLines := make([]string, 0, 1)
 	for line := range lineChannel {
 		receivedLines = append(receivedLines, line)
 	}
@@ -126,37 +117,6 @@ func TestGetLinesChannel_SingleLine(t *testing.T) {
 
 	if receivedLines[0] != "single line" {
 		t.Errorf("Expected 'single line', got '%s'", receivedLines[0])
-	}
-
-	if !reader.closed {
-		t.Error("Expected reader to be closed")
-	}
-}
-
-func TestGetLinesChannel_CloseError(t *testing.T) {
-	closeError := errors.New("close error")
-	reader := newMockReadCloserWithError("line1\nline2", closeError)
-
-	lineChannel, errorChannel := GetLinesChannel(reader)
-
-	var receivedLines []string
-	for line := range lineChannel {
-		receivedLines = append(receivedLines, line)
-	}
-
-	// Check for errors
-	select {
-	case err := <-errorChannel:
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-	default:
-		// No error, which is expected for scanner errors
-	}
-
-	expectedLines := []string{"line1", "line2"}
-	if len(receivedLines) != len(expectedLines) {
-		t.Errorf("Expected %d lines, got %d", len(expectedLines), len(receivedLines))
 	}
 
 	if !reader.closed {

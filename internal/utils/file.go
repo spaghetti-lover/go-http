@@ -6,33 +6,29 @@ import (
 	"log"
 )
 
-func GetLinesChannel(f io.ReadCloser) (<-chan string, <-chan error) {
-	lineChannel := make(chan string, 1)
-	errorChannel := make(chan error, 1)
+func GetLinesChannel(f io.ReadCloser) (lineChannel <-chan string, errorChannel <-chan error) {
+	lineChan := make(chan string, 1)
+	errChan := make(chan error, 1)
 
 	go func() {
+		defer close(lineChan)
+		defer close(errChan)
 		defer func() {
-			if closeErr := f.Close(); closeErr != nil {
-				select {
-				case errorChannel <- closeErr:
-				default:
-					log.Printf("Failed to close file: %v", closeErr)
-				}
+			if err := f.Close(); err != nil {
+				log.Printf("Error closing file: %v", err)
 			}
 		}()
-		defer close(lineChannel)
-		defer close(errorChannel)
 
 		scanner := bufio.NewScanner(f)
 		for scanner.Scan() {
 			line := scanner.Text()
-			lineChannel <- line
+			lineChan <- line
 		}
 
 		if err := scanner.Err(); err != nil {
-			errorChannel <- err
+			errChan <- err
 		}
 	}()
 
-	return lineChannel, errorChannel
+	return lineChan, errChan
 }

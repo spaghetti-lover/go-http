@@ -21,7 +21,7 @@ func main() {
 		select {
 		case line, ok := <-lineChannel:
 			if !ok {
-				return //Channel is closed
+				return // Channel is closed
 			}
 			fmt.Printf("read: %s\n", line)
 

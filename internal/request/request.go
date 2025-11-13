@@ -4,14 +4,18 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"sort"
+
+	"github.com/spaghetti-lover/go-http/internal/headers"
 )
 
 type parserState string
 
 const (
-	StateInit  parserState = "init"
-	StateDone  parserState = "done"
-	StateError parserState = "error"
+	StateInit    parserState = "init"
+	StateHeaders parserState = "headers"
+	StateDone    parserState = "done"
+	StateError   parserState = "error"
 )
 
 type Line struct {
@@ -26,12 +30,14 @@ func (r *Line) ValidHTTP() bool {
 
 type Request struct {
 	RequestLine Line
+	Headers     *headers.Headers
 	state       parserState
 }
 
 func newRequest() *Request {
 	return &Request{
-		state: StateInit,
+		state:   StateInit,
+		Headers: headers.NewHeaders(),
 	}
 }
 
@@ -68,34 +74,60 @@ func parseRequestLine(b []byte) (*Line, int, error) {
 	return rl, read, nil
 }
 
-func (r *Request) parse(data []byte) (int, error) {
-
-	read := 0
-
-outer:
-	for {
-		switch r.state {
-		case StateError:
-			return 0, ErrorRequestInErrorState
-		case StateInit:
-			rl, n, err := parseRequestLine(data[read:])
-			if err != nil {
-				return 0, err
-			}
-
-			if n == 0 {
-				break outer
-			}
-
-			r.RequestLine = *rl
-			read += n
-			r.state = StateDone
-
-		case StateDone:
-			break outer
+func (r *Request) parseSingle(data []byte) (int, error) {
+	switch r.state {
+	case StateError:
+		return 0, ErrorRequestInErrorState
+	case StateInit:
+		rl, n, err := parseRequestLine(data)
+		if err != nil {
+			return 0, err
 		}
+
+		if n == 0 {
+			return 0, nil
+		}
+
+		r.RequestLine = *rl
+		r.state = StateHeaders
+		return n, nil
+
+	case StateHeaders:
+		n, done, err := r.Headers.Parse(data)
+		if err != nil {
+			return 0, err
+		}
+
+		if done {
+			r.state = StateDone
+		}
+
+		return n, nil
+
+	case StateDone:
+		return 0, nil
 	}
-	return read, nil
+
+	return 0, nil
+}
+
+func (r *Request) parse(data []byte) (int, error) {
+	totalBytesParsed := 0
+
+	for r.state != StateDone {
+		n, err := r.parseSingle(data[totalBytesParsed:])
+		if err != nil {
+			return 0, err
+		}
+
+		if n == 0 {
+			break
+		}
+
+		totalBytesParsed += n
+	}
+
+	return totalBytesParsed, nil
 }
 
 func (r *Request) done() bool {
@@ -104,6 +136,31 @@ func (r *Request) done() bool {
 
 func (r *Request) error() bool {
 	return r.state == StateError
+}
+
+func (r *Request) String() string {
+	var buf bytes.Buffer
+
+	buf.WriteString("Request line:\n")
+	buf.WriteString(fmt.Sprintf("- Method: %s\n", r.RequestLine.Method))
+	buf.WriteString(fmt.Sprintf("- Target: %s\n", r.RequestLine.RequestTarget))
+	buf.WriteString(fmt.Sprintf("- Version: %s\n", r.RequestLine.HttpVersion))
+
+	buf.WriteString("Headers:\n")
+
+	// Get all headers and sort keys for consistent output
+	allHeaders := r.Headers.All()
+	keys := make([]string, 0, len(allHeaders))
+	for k := range allHeaders {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		buf.WriteString(fmt.Sprintf("- %s: %s\n", k, allHeaders[k]))
+	}
+
+	return buf.String()
 }
 
 func FromReader(reader io.Reader) (*Request, error) {

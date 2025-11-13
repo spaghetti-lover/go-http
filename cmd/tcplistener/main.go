@@ -24,39 +24,19 @@ func main() {
 			continue
 		}
 
-		r, err := request.FromReader(conn)
-		if err != nil {
-			log.Fatalf("Error reading from %s: %v", conn.RemoteAddr(), err)
-		}
-
-		fmt.Printf("Request line:\n")
-		fmt.Printf("- Method: %s\n", r.RequestLine.Method)
-		fmt.Printf("- Target: %s\n", r.RequestLine.RequestTarget)
-		fmt.Printf("- Version: %s\n", r.RequestLine.HttpVersion)
+		go handleConnection(conn)
 	}
 }
 
-// func handleConnection(conn net.Conn) {
-// 	defer conn.Close()
+func handleConnection(conn net.Conn) {
+	defer conn.Close()
 
-// 	log.Printf("New connection from %s", conn.RemoteAddr())
+	req, err := request.FromReader(conn)
+	if err != nil {
+		log.Printf("Error reading from %s: %v", conn.RemoteAddr(), err)
+		return
+	}
 
-// 	lineChannel, errorChannel := utils.GetLinesChannel(conn)
+	fmt.Print(req.String())
 
-// 	for {
-// 		select {
-// 		case line, ok := <-lineChannel:
-// 			if !ok {
-// 				log.Printf("Connection closed from %s", conn.RemoteAddr())
-// 				return
-// 			}
-// 			fmt.Printf("read: %s\n", line)
-
-// 		case err := <-errorChannel:
-// 			if err != nil {
-// 				log.Printf("Error reading from %s: %v", conn.RemoteAddr(), err)
-// 				return
-// 			}
-// 		}
-// 	}
-// }
+}

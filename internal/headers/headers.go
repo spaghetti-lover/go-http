@@ -42,7 +42,7 @@ func isToken(str []byte) bool {
 
 var rn = []byte("\r\n")
 
-func parseHeader(fieldLine []byte) (name string, value string, err error) {
+func parseHeader(fieldLine []byte) (name, value string, err error) {
 	parts := bytes.SplitN(fieldLine, []byte(":"), 2)
 	if len(parts) != 2 {
 		return "", "", fmt.Errorf("malformed field line")

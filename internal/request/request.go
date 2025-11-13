@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 
 	"github.com/spaghetti-lover/go-http/internal/headers"
 )
@@ -14,6 +15,7 @@ type parserState string
 const (
 	StateInit    parserState = "init"
 	StateHeaders parserState = "headers"
+	StateBody    parserState = "body"
 	StateDone    parserState = "done"
 	StateError   parserState = "error"
 )
@@ -31,6 +33,7 @@ func (r *Line) ValidHTTP() bool {
 type Request struct {
 	RequestLine Line
 	Headers     *headers.Headers
+	Body        []byte
 	state       parserState
 }
 
@@ -44,6 +47,7 @@ func newRequest() *Request {
 var ErrMalformedRequestLine = fmt.Errorf("malformed start line")
 var ErrUnsupportedHTTPVersion = fmt.Errorf("unsupported http version")
 var ErrorRequestInErrorState = fmt.Errorf("request in error state")
+var ErrBodyTooLarge = fmt.Errorf("body exceeds content-length")
 var SEPARATOR = []byte("\r\n")
 
 func parseRequestLine(b []byte) (*Line, int, error) {
@@ -99,10 +103,38 @@ func (r *Request) parseSingle(data []byte) (int, error) {
 		}
 
 		if done {
-			r.state = StateDone
+			r.state = StateBody
 		}
 
 		return n, nil
+
+	case StateBody:
+		contentLengthStr := r.Headers.Get("Content-Length")
+		if contentLengthStr == "" {
+			r.state = StateDone
+			return 0, nil
+		}
+
+		contentLength, err := strconv.Atoi(contentLengthStr)
+		if err != nil {
+			return 0, fmt.Errorf("invalid content-length: %w", err)
+		}
+
+		// Append all available data to body
+		r.Body = append(r.Body, data...)
+
+		// Check if body exceeds content length
+		if len(r.Body) > contentLength {
+			return 0, ErrBodyTooLarge
+		}
+
+		// Check if receiving all the body data
+		if len(r.Body) == contentLength {
+			r.state = StateDone
+		}
+
+		// Report that consuming all the data
+		return len(data), nil
 
 	case StateDone:
 		return 0, nil
@@ -159,6 +191,10 @@ func (r *Request) String() string {
 	for _, k := range keys {
 		buf.WriteString(fmt.Sprintf("- %s: %s\n", k, allHeaders[k]))
 	}
+
+	buf.WriteString("Body:\n")
+	buf.WriteString(string(r.Body))
+	buf.WriteString("\n")
 
 	return buf.String()
 }

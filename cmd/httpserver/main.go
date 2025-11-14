@@ -59,6 +59,12 @@ func handleRequest(w *response.Writer, req *request.Request) {
 		return
 	}
 
+	// Check if this is a video request
+	if req.RequestLine.RequestTarget == "/video" {
+		handleVideo(w, req)
+		return
+	}
+
 	var statusCode response.StatusCode
 	var body string
 
@@ -101,6 +107,45 @@ func handleRequest(w *response.Writer, req *request.Request) {
 		log.Printf("Error writing body: %v", err)
 		return
 	}
+}
+
+func handleVideo(w *response.Writer, req *request.Request) {
+	// Read the video file
+	videoData, err := os.ReadFile("assets/vim.mp4")
+	if err != nil {
+		log.Printf("Error reading video file: %v", err)
+		writeError(w, response.InternalServerError, "Failed to read video file")
+		return
+	}
+
+	// Write status line
+	err = w.WriteStatusLine(response.OK)
+	if err != nil {
+		log.Printf("Error writing status line: %v", err)
+		return
+	}
+
+	// Create headers with video content type
+	h := headers.NewHeaders()
+	h.Set("Content-Length", strconv.Itoa(len(videoData)))
+	h.Set("Connection", "close")
+	h.Override("Content-Type", "video/mp4")
+
+	// Write headers
+	err = w.WriteHeaders(h)
+	if err != nil {
+		log.Printf("Error writing headers: %v", err)
+		return
+	}
+
+	// Write body (binary video data)
+	_, err = w.WriteBody(videoData)
+	if err != nil {
+		log.Printf("Error writing body: %v", err)
+		return
+	}
+
+	log.Println("Video served successfully")
 }
 
 func handleProxy(w *response.Writer, req *request.Request) {
@@ -203,7 +248,7 @@ func handleProxy(w *response.Writer, req *request.Request) {
 	// Write trailers
 	err = w.WriteTrailers(trailers)
 	if err != nil {
-		log.Printf("Error writing trailers: %w", err)
+		log.Printf("Error writing trailers: %v", err)
 		return
 	}
 

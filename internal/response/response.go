@@ -19,10 +19,11 @@ const (
 type writerState string
 
 const (
-	stateInit    writerState = "init"
-	stateStatus  writerState = "status"
-	stateHeaders writerState = "headers"
-	stateBody    writerState = "body"
+	stateInit     writerState = "init"
+	stateStatus   writerState = "status"
+	stateHeaders  writerState = "headers"
+	stateBody     writerState = "body"
+	stateTrailers writerState = "trailers"
 )
 
 type Writer struct {
@@ -147,6 +148,31 @@ func (w *Writer) WriteChunkedBodyDone() (int, error) {
 
 	w.state = stateBody
 	return n, nil
+}
+
+func (w *Writer) WriteTrailers(h *headers.Headers) error {
+	if w.state != stateBody {
+		return fmt.Errorf("WriteTrailers must be called after WriteChunkedBodyDone")
+	}
+
+	allHeaders := h.All()
+
+	for key, value := range allHeaders {
+		trailerLine := fmt.Sprintf("%s: %s\r\n", key, value)
+		_, err := w.writer.Write([]byte(trailerLine))
+		if err != nil {
+			return fmt.Errorf("error writing trailer: %w", err)
+		}
+	}
+
+	// Write final CRLF to end trailers
+	_, err := w.writer.Write([]byte("\r\n"))
+	if err != nil {
+		return fmt.Errorf("error writing trailer separator: %w", err)
+	}
+
+	w.state = stateTrailers
+	return nil
 }
 
 func WriteStatusLine(w io.Writer, statusCode StatusCode) error {

@@ -1,9 +1,6 @@
 package server
 
 import (
-	"bytes"
-	"fmt"
-	"io"
 	"log"
 	"net"
 	"strconv"
@@ -13,37 +10,7 @@ import (
 	"github.com/spaghetti-lover/go-http/internal/response"
 )
 
-type HandlerError struct {
-	StatusCode response.StatusCode
-	Message    string
-}
-
-type Handler func(w io.Writer, req *request.Request) *HandlerError
-
-func (he *HandlerError) Write(w io.Writer) error {
-	// Write status line
-	err := response.WriteStatusLine(w, he.StatusCode)
-	if err != nil {
-		return fmt.Errorf("error writing status line: %w", err)
-	}
-
-	// Get headers with content length
-	headers := response.GetDefaultHeaders(len(he.Message))
-
-	// Write headers
-	err = response.WriteHeaders(w, headers)
-	if err != nil {
-		return fmt.Errorf("error writing headers: %w", err)
-	}
-
-	// Write error message body
-	_, err = w.Write([]byte(he.Message))
-	if err != nil {
-		return fmt.Errorf("error writing body: %w", err)
-	}
-
-	return nil
-}
+type Handler func(w *response.Writer, req *request.Request)
 
 type Server struct {
 	listener net.Listener
@@ -79,7 +46,7 @@ func (s *Server) listen() {
 	for {
 		conn, err := s.listener.Accept()
 		if err != nil {
-			// Ignote errors after servers is closed
+			// Ignore errors after server is closed
 			if s.closed.Load() {
 				return
 			}
@@ -101,43 +68,9 @@ func (s *Server) handle(conn net.Conn) {
 		return
 	}
 
-	// Create a new empty bytes.Buffer for the handler to write to
-	buf := &bytes.Buffer{}
+	// Create a response writer
+	writer := response.NewWriter(conn)
 
 	// Call the handler function
-	handleErr := s.handler(buf, req)
-
-	// If the handler errors, write the error to the connection
-	if handleErr != nil {
-		err = handleErr.Write(conn)
-		if err != nil {
-			log.Printf("Error writing handler error: %v", err)
-		}
-		return
-	}
-
-	// If the handler succeeds:
-	// Create new default response headers
-	headers := response.GetDefaultHeaders(buf.Len())
-
-	// Write status line
-	err = response.WriteStatusLine(conn, response.OK)
-	if err != nil {
-		log.Printf("Error writing status line: %v", err)
-		return
-	}
-
-	// Write the headers
-	err = response.WriteHeaders(conn, headers)
-	if err != nil {
-		log.Printf("Error writing headers: %v", err)
-		return
-	}
-
-	// Write the response body from the handler's buffer
-	_, err = conn.Write(buf.Bytes())
-	if err != nil {
-		log.Printf("Error writing response body: %v", err)
-		return
-	}
+	s.handler(writer, req)
 }

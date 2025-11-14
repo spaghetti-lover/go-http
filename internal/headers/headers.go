@@ -88,6 +88,11 @@ func (h *Headers) Set(name, value string) {
 	}
 }
 
+func (h *Headers) Override(name, value string) {
+	name = strings.ToLower(name)
+	h.headers[name] = value
+}
+
 func (h *Headers) All() map[string]string {
 	return h.headers
 }

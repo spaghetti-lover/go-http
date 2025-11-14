@@ -38,5 +38,4 @@ func handleConnection(conn net.Conn) {
 	}
 
 	fmt.Print(req.String())
-
 }

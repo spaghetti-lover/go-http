@@ -102,6 +102,53 @@ func (w *Writer) WriteBody(p []byte) (int, error) {
 	return n, nil
 }
 
+func (w *Writer) WriteChunkedBody(p []byte) (int, error) {
+	if w.state != stateHeaders && w.state != stateBody {
+		return 0, fmt.Errorf("WriteChunkedBody must be called after WriteHeaders")
+	}
+
+	if len(p) == 0 {
+		return 0, nil
+	}
+
+	// Write chunk size in hexadecimal
+	chunkSize := fmt.Sprintf("%X\r\n", len(p))
+	_, err := w.writer.Write([]byte(chunkSize))
+	if err != nil {
+		return 0, fmt.Errorf("error writing chunk size: %w", err)
+	}
+
+	// Write chunk data
+	n, err := w.writer.Write(p)
+	if err != nil {
+		return n, fmt.Errorf("error writing chunk data: %w", err)
+	}
+
+	// Write trailing CRLF
+	_, err = w.writer.Write([]byte("\r\n"))
+	if err != nil {
+		return n, fmt.Errorf("error writing chunk trailing CRLF: %w", err)
+	}
+
+	w.state = stateBody
+	return n, nil
+}
+
+func (w *Writer) WriteChunkedBodyDone() (int, error) {
+	if w.state != stateHeaders && w.state != stateBody {
+		return 0, fmt.Errorf("WriteChunkedBodyDone muse be called after WriteHeaders or WriteChunkedBody")
+	}
+
+	// Write final chunk: "0\r\n\r\n"
+	n, err := w.writer.Write([]byte("0\r\n\r\n"))
+	if err != nil {
+		return n, fmt.Errorf("error writing final chunk: %w", err)
+	}
+
+	w.state = stateBody
+	return n, nil
+}
+
 func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
 	var statusLine string
 	switch statusCode {

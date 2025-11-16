@@ -13,10 +13,10 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/spaghetti-lover/go-http/internal/headers"
-	"github.com/spaghetti-lover/go-http/internal/request"
-	"github.com/spaghetti-lover/go-http/internal/response"
-	"github.com/spaghetti-lover/go-http/internal/server"
+	"github.com/spaghetti-lover/go-http/pkg/headers"
+	"github.com/spaghetti-lover/go-http/pkg/request"
+	"github.com/spaghetti-lover/go-http/pkg/response"
+	"github.com/spaghetti-lover/go-http/pkg/server"
 )
 
 const (
@@ -32,10 +32,10 @@ const (
 `
 	html500 = `<html>
   <head>
-    <title>500 Internal Server Error</title>
+    <title>500 internal Server Error</title>
   </head>
   <body>
-    <h1>Internal Server Error</h1>
+    <h1>internal Server Error</h1>
     <p>Okay, you know what? This one is on me.</p>
   </body>
 </html>

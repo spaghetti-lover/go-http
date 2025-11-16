@@ -116,7 +116,7 @@ curl http://localhost:42069/
 # 400 Bad Request
 curl http://localhost:42069/yourproblem
 
-# 500 Internal Server Error
+# 500 internal Server Error
 curl http://localhost:42069/myproblem
 ```
 

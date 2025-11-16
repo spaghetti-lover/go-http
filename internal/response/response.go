@@ -50,7 +50,7 @@ func (w *Writer) WriteStatusLine(statusCode StatusCode) error {
 	case BadRequest:
 		statusLine = "HTTP/1.1 400 Bad Request"
 	case InternalServerError:
-		statusLine = "HTTP/1.1 500 Internal Server Error"
+		statusLine = "HTTP/1.1 500 internal Server Error"
 	default:
 		statusLine = "HTTP/1.1 " + string(statusCode)
 	}
@@ -183,7 +183,7 @@ func WriteStatusLine(w io.Writer, statusCode StatusCode) error {
 	case BadRequest:
 		statusLine = "HTTP/1.1 400 Bad Request"
 	case InternalServerError:
-		statusLine = "HTTP/1.1 500 Internal Server Error"
+		statusLine = "HTTP/1.1 500 internal Server Error"
 	default:
 		statusLine = "HTTP/1.1 " + string(statusCode)
 	}

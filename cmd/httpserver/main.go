@@ -111,7 +111,7 @@ func handleRequest(w *response.Writer, req *request.Request) {
 
 func handleVideo(w *response.Writer, req *request.Request) {
 	// Read the video file
-	videoData, err := os.ReadFile("assets/vim.mp4")
+	videoData, err := os.ReadFile("assets/naruto.mp4")
 	if err != nil {
 		log.Printf("Error reading video file: %v", err)
 		writeError(w, response.InternalServerError, "Failed to read video file")

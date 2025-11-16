@@ -1,141 +1,198 @@
-# Go HTTP Server
+# Go-http
 
-A custom HTTP/1.1 server implementation built from scratch in Go, demonstrating low-level HTTP protocol handling without using the standard `net/http` package. And yep, this README is AI generated because this project is for learning purpose ^^. U can check my docs why i code like this or just wath Primeagen.
+Lighweight library for HTTP/1.1 inspired by Primeagen
 
-## 🎯 Overview
+## Usage as a library
 
-This project implements a fully functional HTTP/1.1 server that handles:
-
-- Request parsing (request line, headers, body)
-- Response writing with proper status codes and headers
-- Chunked transfer encoding
-- HTTP trailers
-- Binary data (video streaming)
-- Proxy requests to external APIs
-
-## 🚀 Features
-
-### Core HTTP Components
-
-- **Request Parser**: Parses HTTP/1.1 requests including:
-
-  - Request line (method, target, version)
-  - Headers (with case-insensitive handling and RFC 9110 compliance)
-  - Request body with Content-Length support
-
-- **Response Writer**: State-machine based response writer that ensures proper HTTP response structure:
-
-  - Status line
-  - Headers
-  - Body (text or binary)
-  - Chunked encoding support
-  - Trailers support
-
-- **Header Management**:
-  - RFC-compliant header parsing and validation
-  - Case-insensitive header operations
-  - Multiple value support for duplicate headers
-
-### Advanced Features
-
-- **Chunked Transfer Encoding**: Stream large responses in chunks
-- **HTTP Trailers**: Send metadata after response body (hash, content length)
-- **Binary Data Support**: Serve video files and other binary content
-- **Proxy Handler**: Forward requests to external APIs (httpbin.org)
-- **Graceful Shutdown**: Proper signal handling and server cleanup
-
-## 📁 Project Structure
-
-```
-.
-├── cmd/
-│   ├── httpserver/      # Main HTTP server application
-│   └── tcplistener/     # Basic TCP listener for debugging
-├── internal/
-│   ├── headers/         # HTTP header parsing and management
-│   ├── request/         # HTTP request parsing
-│   ├── response/        # HTTP response writing
-│   ├── server/          # Server implementation
-│   └── utils/           # Utility functions
-├── docs/                # Documentation
-├── assets/              # Static assets (ignored in git)
-└── README.md
-```
-
-## 🛠️ Installation
-
-### Prerequisites
-
-- Go 1.24.1 or higher
-- Make (optional)
-
-### Setup
-
-1. Clone the repository:
+### 1. Installation
 
 ```bash
-git clone https://github.com/spaghetti-lover/go-http.git
-cd go-http
+go get github.com/spaghetti-lover/go-http
 ```
 
-2. Download dependencies:
+### 2. Quick Start
 
-```bash
-go mod download
+```go
+package main
+
+import (
+    "log"
+    "os"
+    "os/signal"
+    "syscall"
+
+    "github.com/spaghetti-lover/go-http/pkg/server"
+    "github.com/spaghetti-lover/go-http/pkg/response"
+    "github.com/spaghetti-lover/go-http/pkg/headers"
+)
+
+func main() {
+    // Create handler
+    handler := func(w *response.Writer, req *request.Request) {
+        // Write status
+        w.WriteStatusLine(response.OK)
+
+        // Write headers
+        h := headers.NewHeaders()
+        h.Set("Content-Length", "13")
+        h.Override("Content-Type", "text/plain")
+        w.WriteHeaders(h)
+
+        // Write body
+        w.WriteBody([]byte("Hello, world!"))
+    }
+
+    // Start server
+    srv, err := server.Serve(8080, handler)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer srv.Close()
+
+    // Wait for interrupt
+    sig := make(chan os.Signal, 1)
+    signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
+    <-sig
+}
 ```
 
-3. (Optional) Download sample video for binary data testing:
+### 3. Public API
 
-```bash
-mkdir assets
-curl -o assets/vim.mp4 https://storage.googleapis.com/qvault-webapp-dynamic-assets/lesson_videos/vim-vs-neovim-prime.mp4
+#### Server
+
+```go
+// Start server on port with handler
+server.Serve(port int, handler Handler) (*Server, error)
+
+// Handler signature
+type Handler func(w *response.Writer, req *request.Request)
 ```
 
-## 🎮 Usage
+#### Response Writer
 
-### Start the Server
+```go
+// Status codes
+response.OK                  // 200
+response.BadRequest          // 400
+response.InternalServerError // 500
+
+// Write methods
+w.WriteStatusLine(statusCode StatusCode) error
+w.WriteHeaders(h *headers.Headers) error
+w.WriteBody(p []byte) (int, error)
+
+// Chunked encoding
+w.WriteChunkedBody(p []byte) (int, error)
+w.WriteChunkedBodyDone() (int, error)
+w.WriteTrailers(h *headers.Headers) error
+```
+
+#### Headers
+
+```go
+h := headers.NewHeaders()
+h.Set("Header-Name", "value")      // Add or append
+h.Override("Header-Name", "value") // Replace
+value := h.Get("Header-Name")      // Get value
+```
+
+#### Request
+
+```go
+// Request fields
+req.RequestLine.Method        // GET, POST, etc.
+req.RequestLine.RequestTarget // /path?query
+req.RequestLine.HttpVersion   // HTTP/1.1
+req.Headers                   // *headers.Headers
+req.Body                      // []byte
+```
+
+### 4. Advanced Examples
+
+#### Chunked Response with Trailers
+
+```go
+handler := func(w *response.Writer, req *request.Request) {
+    w.WriteStatusLine(response.OK)
+
+    h := headers.NewHeaders()
+    h.Override("Transfer-Encoding", "chunked")
+    h.Set("Trailer", "X-Content-Length")
+    w.WriteHeaders(h)
+
+    // Send chunks
+    data1 := []byte("chunk1")
+    w.WriteChunkedBody(data1)
+
+    data2 := []byte("chunk2")
+    w.WriteChunkedBody(data2)
+
+    // End chunks
+    w.WriteChunkedBodyDone()
+
+    // Send trailers
+    trailers := headers.NewHeaders()
+    trailers.Set("X-Content-Length", "12")
+    w.WriteTrailers(trailers)
+}
+```
+
+#### Serve Binary File
+
+```go
+handler := func(w *response.Writer, req *request.Request) {
+    if req.RequestLine.RequestTarget == "/video" {
+        data, _ := os.ReadFile("video.mp4")
+
+        w.WriteStatusLine(response.OK)
+
+        h := headers.NewHeaders()
+        h.Set("Content-Length", strconv.Itoa(len(data)))
+        h.Override("Content-Type", "video/mp4")
+        w.WriteHeaders(h)
+
+        w.WriteBody(data)
+    }
+}
+```
+
+### 5. Notes
+
+⚠️ This is an educational project - **not production-ready**
+
+## Usage as a demo
+
+1. Clone repo
+2. Start the Server
 
 ```bash
 # Using go run
-go run ./cmd/httpserver
+go run  ./cmd/httpserver
 
 # Using make
 make run
 ```
 
-The server will start on port `42069`.
-
-### Test Endpoints
-
-#### Basic HTML Responses
+3. Test endpoints
 
 ```bash
-# Success response
 curl http://localhost:42069/
 
 # 400 Bad Request
 curl http://localhost:42069/yourproblem
 
-# 500 internal Server Error
+# 500 Internal Server Error
 curl http://localhost:42069/myproblem
-```
 
-#### Video Streaming (Binary Data)
-
-```bash
-# View in browser
+# View in browser (need to add a video name "naruto.mp4" in folder asset)
 open http://localhost:42069/video
 
-# Download with curl
+# Download with curl (need to add a video name "naruto.mp4" in folder asset)
 curl http://localhost:42069/video --output video.mp4
 
-# Check headers
+# Check headers (need to add a video name "naruto.mp4" in folder asset)
 curl -I http://localhost:42069/video
-```
 
-#### Proxy with Chunked Encoding
-
-```bash
 # Stream data in chunks from httpbin.org
 curl -v http://localhost:42069/httpbin/get
 
@@ -145,118 +202,3 @@ echo -e "GET /httpbin/stream/3 HTTP/1.1\r\nHost: localhost:42069\r\nConnection: 
 # View with curl --raw to see trailers
 curl --raw http://localhost:42069/httpbin/get
 ```
-
-The proxy endpoint will:
-
-- Forward requests to `https://httpbin.org`
-- Stream response using chunked transfer encoding
-- Add trailers with content SHA256 hash and length
-
-## 🧪 Testing
-
-Run all tests:
-
-```bash
-# Run tests
-go test ./... -v
-
-# Run tests with coverage
-go test ./... -cover
-
-# Using make
-make test
-```
-
-## 📚 Implementation Details
-
-### Request Parsing
-
-The request parser uses a state machine approach with these states:
-
-- `StateInit`: Parse request line
-- `StateHeaders`: Parse headers
-- `StateBody`: Read body based on Content-Length
-- `StateDone`: Parsing complete
-
-### Response Writing
-
-The response writer enforces proper HTTP response order:
-
-1. `WriteStatusLine()` - must be called first
-2. `WriteHeaders()` - must be called after status line
-3. `WriteBody()` or `WriteChunkedBody()` - write response data
-4. `WriteTrailers()` - optional, for chunked responses
-
-### Chunked Encoding Format
-
-```
-<chunk-size-hex>\r\n
-<chunk-data>\r\n
-...
-0\r\n
-<trailers>\r\n
-\r\n
-```
-
-## 🔧 Configuration
-
-Server configuration is hardcoded in `main.go`:
-
-- Port: `42069`
-- Buffer size: `1024 bytes`
-- Chunk size for proxy: `1024 bytes`
-
-## 🚦 Signal Handling
-
-The server handles graceful shutdown on:
-
-- `SIGINT` (Ctrl+C)
-- `SIGTERM`
-
-## 📖 HTTP Protocol Notes
-
-### HTTP/1.1 vs HTTP/2 vs HTTP/3
-
-**HTTP/1.1** (this implementation):
-
-- Text-based protocol
-- One request per connection (or pipelining)
-- Header compression: None
-- Transport: TCP
-
-**HTTP/2**:
-
-- Binary protocol
-- Multiplexing (multiple requests on single connection)
-- Header compression (HPACK)
-- Server push support
-- Transport: TCP
-
-**HTTP/3**:
-
-- Built on QUIC (UDP-based)
-- Mandates encryption
-- Faster connection establishment
-- Better performance on lossy networks
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📝 License
-
-This project is open source and available for educational purposes.
-
-## 🙏 Acknowledgments
-
-- Built as a learning project to understand HTTP protocol internals
-- Inspired by low-level network programming concepts
-- RFC 9110 (HTTP Semantics) for protocol specifications
-
-## 📧 Contact
-
-For questions or feedback, please open an issue on GitHub.
-
----
-
-**Note**: This is an educational project and should not be used in production environments. For production use cases, please use the standard Go `net/http` package or other battle-tested HTTP servers.
